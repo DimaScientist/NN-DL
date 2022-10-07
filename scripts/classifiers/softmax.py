@@ -1,26 +1,28 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
+if TYPE_CHECKING:
+    from typing import Tuple
 
-def softmax_loss_naive(W: np.ndarray, X: np.ndarray, y: np.ndarray, reg: float) -> :
+
+def softmax_loss_naive(W: np.ndarray, X: np.ndarray, y: np.ndarray, reg: float) -> Tuple[float, np.ndarray]:
     """
-    Softmax loss function, naive implementation (with loops)
-
-    Inputs have dimension D, there are C classes, and we operate on minibatches
-    of N examples.
-
-    Inputs:
-    - W: A numpy array of shape (D, C) containing weights.
-    - X: A numpy array of shape (N, D) containing a minibatch of data.
-    - y: A numpy array of shape (N,) containing training labels; y[i] = c means
-      that X[i] has label c, where 0 <= c < C.
-    - reg: (float) regularization strength
-
-    Returns a tuple of:
-    - loss as single float
-    - gradient with respect to weights W; an array of same shape as W
-    """
+  Softmax loss function, naive implementation (with loops)
+  Inputs have dimension D, there are C classes, and we operate on minibatches
+  of N examples.
+  Inputs:
+  - W: A numpy array of shape (D, C) containing weights.
+  - X: A numpy array of shape (N, D) containing a minibatch of data.
+  - y: A numpy array of shape (N,) containing training labels; y[i] = c means
+    that X[i] has label c, where 0 <= c < C.
+  - reg: (float) regularization strength
+  Returns a tuple of:
+  - loss as single float
+  - gradient with respect to weights W; an array of same shape as W
+  """
     # Initialize the loss and gradient to zero.
     loss = 0.0
     dW = np.zeros_like(W)
@@ -33,39 +35,43 @@ def softmax_loss_naive(W: np.ndarray, X: np.ndarray, y: np.ndarray, reg: float) 
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    dW_each = np.zeros_like(dW)
-    num_train, _ = X.shape
     num_classes = W.shape[1]
-    func = X.dot(W)
-
-    func_max = np.reshape(np.max(func, axis=1), (num_train, 1))
-    probability = np.exp(func - func_max) / np.sum(np.exp(func - func_max), axis=1, keepdims=True)
-    y_true = np.zeros_like(probability)
-    y_true[np.arange(num_train), y] = 1.0
+    num_train = X.shape[0]
 
     for i in range(num_train):
+        scores = X[i].dot(W)
+        correct_class_score = scores[y[i]]
+
+        sum_j = 0.0
         for j in range(num_classes):
-            loss -= y_true[i, j] * np.log(probability[i, j])
-            dW_each[:, j] -= (y_true[i, j] - probability[i, j]) * X[i]
-        dW += dW_each
+            sum_j += np.exp(scores[j])
+
+        for j in range(num_classes):
+            dW[:, j] += (np.exp(scores[j]) * X[i]) / sum_j
+            if (j == y[i]):
+                dW[:, y[i]] -= X[i]
+
+        loss += -correct_class_score + np.log(sum_j)
 
     loss /= num_train
-    loss += 1 / 2 * reg * np.sum(W * W)
+    loss += 0.5 * reg * np.sum(W * W)
 
     dW /= num_train
-    dW += reg * W
+    dW += W * reg
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    #############################################################################
+    #                          END OF YOUR CODE                                 #
+    #############################################################################
 
     return loss, dW
 
 
-def softmax_loss_vectorized(W: np.array, X: np.array, y: np.array, reg):
+def softmax_loss_vectorized(W: np.ndarray, X: np.ndarray, y: np.ndarray, reg: float) -> Tuple[float, np.ndarray]:
     """
-    Softmax loss function, vectorized version.
-
-    Inputs and outputs are the same as softmax_loss_naive.
-    """
+  Softmax loss function, vectorized version.
+  Inputs and outputs are the same as softmax_loss_naive.
+  """
     # Initialize the loss and gradient to zero.
     loss = 0.0
     dW = np.zeros_like(W)
@@ -78,17 +84,24 @@ def softmax_loss_vectorized(W: np.array, X: np.array, y: np.array, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    num_train, _ = X.shape
+    num_classes = W.shape[1]
+    num_train = X.shape[0]
 
-    func = X.dot(W)
-    func_max = np.reshape(np.max(func, axis=1), (num_train, 1))
-    probability = np.exp(func - func_max) / np.sum(np.exp(func - func_max), axis=1, keepdims=True)
+    scores = X.dot(W)
+    correct_class_scores = scores[range(num_train), y].reshape((num_train, 1))
+    sum_j = np.sum(np.exp(scores), axis=1).reshape((num_train, 1))
 
-    y_true = np.zeros_like(probability)
-    y_true[range(num_train), y] = 1.0
+    loss = np.sum(-1 * correct_class_scores + np.log(sum_j)) / num_train + 0.5 * reg * np.sum(W * W)
 
-    loss += - np.sum(y_true * np.log(probability)) / num_train + 1 / 2 * reg * np.sum(W * W)
-    dW += - np.dot(X.T, y_true - probability) / num_train + reg * W
+    correct_matrix = np.zeros(scores.shape)
+    correct_matrix[range(num_train), y] = 1
+
+    dW = X.T.dot(np.exp(scores) / sum_j) - X.T.dot(correct_matrix)
+    dW = dW / num_train + W * reg
+
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    #############################################################################
+    #                          END OF YOUR CODE                                 #
+    #############################################################################
 
     return loss, dW

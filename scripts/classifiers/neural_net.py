@@ -1,12 +1,12 @@
-from __future__ import annotations, print_function
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Tuple, Dict
 
 import numpy as np
+from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Tuple
-
+    from typing import Optional, Tuple, Union, List
 
 class TwoLayerNet(object):
     """
@@ -15,11 +15,8 @@ class TwoLayerNet(object):
     We train the network with a softmax loss function and L2 regularization on the
     weight matrices. The network uses a ReLU nonlinearity after the first fully
     connected layer.
-
     In other words, the network has the following architecture:
-
     input - fully connected layer - ReLU - fully connected layer - softmax
-
     The outputs of the second fully-connected layer are the scores for each class.
     """
 
@@ -28,18 +25,16 @@ class TwoLayerNet(object):
             input_size: Tuple[int, int],
             hidden_size: Tuple[int, int],
             output_size: Tuple[int, int],
-            std: float = 1e-4
+            std: float = 1e-4,
     ):
         """
         Initialize the model. Weights are initialized to small random values and
         biases are initialized to zero. Weights and biases are stored in the
         variable self.params, which is a dictionary with the following keys:
-
         W1: First layer weights; has shape (D, H)
         b1: First layer biases; has shape (H,)
         W2: Second layer weights; has shape (H, C)
         b2: Second layer biases; has shape (C,)
-
         Inputs:
         - input_size: The dimension D of the input data.
         - hidden_size: The number of neurons H in the hidden layer.
@@ -56,7 +51,7 @@ class TwoLayerNet(object):
             X: np.ndarray,
             y: Optional[np.ndarray] = None,
             reg: float = 0.0
-    ) -> Tuple[float, Dict[str, np.ndarray]]:
+    ) -> Union[Tuple[Any, Dict[str, Union[float, Any]]], Any]:
         """
         Compute the loss and gradients for a two layer fully connected neural
         network.
@@ -93,10 +88,18 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        h1 = np.maximum(0, np.dot(W1, X) + b1)
-        scores = np.dot(h1, W2) + b2
+        Z1 = X.dot(W1) + b1
+        A1 = np.maximum(0, Z1)
+
+        Z2 = A1.dot(W2) + b2
+        A2 = Z2
+
+        scores = A2
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        #############################################################################
+        #                              END OF YOUR CODE                             #
+        #############################################################################
 
         # If the targets are not given then jump out, we're done
         if y is None:
@@ -112,18 +115,20 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        max_scores = np.max(scores, axis=1, keepdims=True)
+        correct_class_scores = scores[range(N), y].reshape((N, 1))
+        correct_matrix = np.zeros(scores.shape)
+        correct_matrix[range(N), y] = 1
 
-        exp_scores = np.exp(scores - max_scores)
-        probabilities = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+        scores_e = np.exp(scores)
+        scores_e_sum = np.sum(scores_e, axis=1).reshape((N, 1))
 
-        correct_log_probs = -np.log(probabilities[range(N), y])
+        loss = np.sum(-1 * correct_class_scores + np.log(scores_e_sum)) / N
+        loss += 0.5 * reg * (np.sum(W1 * W1) + np.sum(W2 * W2))
 
-        loss_data = np.sum(correct_log_probs) / N
-        loss_reg = (reg * np.sum(W1 * W1) + reg * np.sum(W2 * W2)) / 2
-
-        loss = loss_data + loss_reg
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        #############################################################################
+        #                              END OF YOUR CODE                             #
+        #############################################################################
 
         # Backward pass: compute gradients
         grads = {}
@@ -133,28 +138,21 @@ class TwoLayerNet(object):
         # grads['W1'] should store the gradient on W1, and be a matrix of same size #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        d_scores = probabilities
-        d_scores[range(N), y] -= 1
-        d_scores /= N
 
-        dW2 = np.dot(h1.T, d_scores)
-        db2 = np.sum(d_scores, axis=0, keepdims=True)
-        dh1 = np.dot(d_scores, W2.T)
+        B = np.full((N, 1), 1.0)
 
-        dh1[h1 <= 0] = 0
+        dL = (scores_e / scores_e_sum - correct_matrix) / N
+        grads['W2'] = A1.T.dot(dL) + reg * W2
+        grads['b2'] = B.T.dot(dL)
 
-        dW1 = np.dot(X.T, dh1)
-        db1 = np.sum(dh1, axis=0, keepdims=True)
-
-        dW2 += reg * W2
-        db1 += reg * W1
-
-        grads["W1"] = dW1
-        grads["b1"] = db1.reshape(-1)
-        grads["W2"] = dW2
-        grads["b2"] = db2.reshape(-1)
+        dA1 = dL.dot(W2.T) * (Z1 > 0)
+        grads['W1'] = X.T.dot(dA1) + reg * W1
+        grads['b1'] = B.T.dot(dA1)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        #############################################################################
+        #                              END OF YOUR CODE                             #
+        #############################################################################
 
         return loss, grads
 
@@ -166,13 +164,13 @@ class TwoLayerNet(object):
             y_val: np.ndarray,
             learning_rate: float = 1e-3,
             learning_rate_decay: float = 0.95,
-            reg: float = 5e-6, num_iters: int = 100,
+            reg: float = 1e-5,
+            num_iters: int = 100,
             batch_size: int = 200,
             verbose: bool = False
     ) -> Dict[str, List[float]]:
         """
         Train this neural network using stochastic gradient descent.
-
         Inputs:
         - X: A numpy array of shape (N, D) giving training data.
         - y: A numpy array f shape (N,) giving training labels; y[i] = c means that
@@ -195,7 +193,7 @@ class TwoLayerNet(object):
         train_acc_history = []
         val_acc_history = []
 
-        for it in range(num_iters):
+        for it in tqdm(range(num_iters)):
             X_batch = None
             y_batch = None
 
@@ -205,11 +203,14 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            sample_index = np.random.choice(num_train, batch_size, replace=True)
-            X_batch = X[sample_index]
-            y_batch = y[sample_index]
+            sample_idx = np.random.choice(num_train, batch_size)
+            X_batch = X[sample_idx]
+            y_batch = y[sample_idx]
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+            #########################################################################
+            #                             END OF YOUR CODE                          #
+            #########################################################################
 
             # Compute loss and gradients using the current minibatch
             loss, grads = self.loss(X_batch, y=y_batch, reg=reg)
@@ -223,17 +224,13 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            W2 = grads.get("W2")
-            b2 = grads.get("b2")
-            self.params["W2"] -= W2 * learning_rate
-            self.params["b2"] -= b2 * learning_rate
-
-            W1 = grads.get("W1")
-            b1 = grads.get("b1")
-            self.params["W1"] -= W1 * learning_rate
-            self.params["b1"] -= b1 * learning_rate
+            for w in self.params:
+                self.params[w] -= grads[w].reshape(self.params[w].shape) * learning_rate
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+            #########################################################################
+            #                             END OF YOUR CODE                          #
+            #########################################################################
 
             if verbose and it % 100 == 0:
                 print('iteration %d / %d: loss %f' % (it, num_iters, loss))
@@ -277,10 +274,12 @@ class TwoLayerNet(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        h1 = np.maximum(0, np.dot(X, self.params.get("W1") + self.params.get("b1")))
-        scores = np.dot(h1, self.params.get("W2")) + self.params.get("b2")
+        scores = self.loss(X)
         y_pred = np.argmax(scores, axis=1)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        ###########################################################################
+        #                              END OF YOUR CODE                           #
+        ###########################################################################
 
         return y_pred
