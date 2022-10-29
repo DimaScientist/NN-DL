@@ -7,4 +7,4 @@ __Выполнил:__ студент 6231-010402D Баканов Дмитрий
 * [x] [Лабораторная работа 1](https://github.com/DimaScientist/NN-DL/blob/main/lab1-2/lab1_Bakanov_6231.ipynb)
 * [x] [Лабораторная работа 2](https://github.com/DimaScientist/NN-DL/blob/main/lab1-2/lab2_Bakanov_6231.ipynb)
 * [x] [Лабораторная работа 3](https://github.com/DimaScientist/NN-DL/blob/main/lab3/lab3_Bakanov_6231.ipynb)
-* [ ] [Лабораторная работа 4]()
+* [x] [Лабораторная работа 4](https://github.com/DimaScientist/NN-DL/blob/main/lab4/lab_4_tensorflow_6231_Bakanov.ipynb)
